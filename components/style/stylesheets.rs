@@ -962,7 +962,7 @@ impl<'a, 'b> AtRuleParser for NestedRuleParser<'a, 'b> {
                 Ok(AtRuleType::WithBlock(AtRulePrelude::Media(Arc::new(RwLock::new(media_queries)))))
             },
             "supports" => {
-                let cond = SupportsCondition::parse(input, true)?;
+                let cond = SupportsCondition::parse(input)?;
                 Ok(AtRuleType::WithBlock(AtRulePrelude::Supports(cond)))
             },
             "font-face" => {

@@ -53,7 +53,7 @@ impl CSSSupportsRule {
     /// https://drafts.csswg.org/css-conditional-3/#the-csssupportsrule-interface
     pub fn set_condition_text(&self, text: DOMString) {
         let mut input = Parser::new(&text);
-        let cond = SupportsCondition::parse(&mut input, true);
+        let cond = SupportsCondition::parse(&mut input);
         if let Ok(cond) = cond {
             let url = self.global().as_window().Document().url();
             let context = ParserContext::new_for_cssom(&url);

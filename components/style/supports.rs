@@ -4,7 +4,7 @@
 
 //! [@supports rules](https://drafts.csswg.org/css-conditional-3/#at-supports)
 
-use cssparser::{parse_important, Parser};
+use cssparser::{parse_important, Parser, Token};
 use parser::ParserContext;
 use properties::{PropertyDeclaration, PropertyId};
 use std::fmt;
@@ -32,81 +32,62 @@ pub enum SupportsCondition {
 impl SupportsCondition {
     /// Parse a condition
     ///
-    /// `toplevel` is true when parsing a top-level condition in an `@supports` block,
-    /// and false when dealing with paren-nested conditions like `not(cond)` or `(cond) and (cond)`.
-    /// Declaration and FutureSyntax conditions can't appear in the top level without parens
-    pub fn parse(input: &mut Parser, toplevel: bool) -> Result<SupportsCondition, ()> {
+    /// https://drafts.csswg.org/css-conditional/#supports_condition
+    pub fn parse(input: &mut Parser) -> Result<SupportsCondition, ()> {
         if let Ok(_) = input.try(|i| i.expect_ident_matching("not")) {
-            let inner = SupportsCondition::parse_with_parens(input)?;
+            let inner = SupportsCondition::parse_in_parens(input)?;
             return Ok(SupportsCondition::Not(Box::new(inner)));
         }
-        if !toplevel {
-            if let Ok(decl) = input.try(Declaration::parse) {
-                return Ok(SupportsCondition::Declaration(decl))
-            }
-        }
 
-        if let Ok(first_cond) = input.try(SupportsCondition::parse_with_parens) {
-            if input.is_exhausted() {
-                // nested parens
-                return Ok(SupportsCondition::Parenthesized(Box::new(first_cond)));
+        let in_parens = SupportsCondition::parse_in_parens(input)?;
+
+        type Fn = fn(Vec<SupportsCondition>) -> SupportsCondition;
+        let (keyword, wrapper): (&str, Fn) = match input.next() {
+            Err(()) => {
+                // End of input
+                return Ok(in_parens)
             }
-            let mut vec = vec![first_cond];
-            let ident = input.expect_ident()?;
-            let parse_vec = |i| {
-                    let mut first = true;
-                    while !input.is_exhausted() {
-                        if !first {
-                            input.expect_ident_matching(i)?;
-                        }
-                        first = false;
-                        vec.push(SupportsCondition::parse_with_parens(input)?);
-                    }
-                    Ok(vec)
-            };
-            match_ignore_ascii_case! { ident,
-                "and" => Ok(SupportsCondition::And(parse_vec(&ident)?)),
-                "or" => Ok(SupportsCondition::Or(parse_vec(&ident)?)),
-                _ => Err(())
+            Ok(Token::Ident(ident)) => {
+                match_ignore_ascii_case! { ident,
+                    "and" => ("and", SupportsCondition::And),
+                    "or" => ("or", SupportsCondition::Or),
+                    _ => return Err(())
+                }
             }
-        } else {
-            // parse_with_parens handles general_enclosed
-            // the only time that won't happen is at the top level,
-            // and general_enclosed isn't valid at the top level anyway
-            Err(())
+            _ => return Err(())
+        };
+
+        let mut conditions = Vec::with_capacity(2);
+        conditions.push(in_parens);
+        loop {
+            conditions.push(SupportsCondition::parse_in_parens(input)?);
+            if input.try(|input| input.expect_ident_matching(keyword)).is_err() {
+                // Did not find the expected keyword.
+                // If we found some other token,
+                // it will be rejected by `Parser::parse_entirely` somewhere up the stack.
+                return Ok(wrapper(conditions))
+            }
         }
     }
 
-    // https://drafts.csswg.org/css-conditional-3/#supports_condition_in_parens
-    fn parse_with_parens(input: &mut Parser) -> Result<SupportsCondition, ()> {
+    /// https://drafts.csswg.org/css-conditional-3/#supports_condition_in_parens
+    fn parse_in_parens(input: &mut Parser) -> Result<SupportsCondition, ()> {
         let pos = input.position();
-        if let Ok(_) = input.try(Parser::expect_parenthesis_block) {
-            let inner = input.try(|i| {
-                i.parse_nested_block(|input| SupportsCondition::parse(input, false))
-            });
-            // The above will fail in case of a general_enclosed
-            // https://drafts.csswg.org/css-conditional-3/#general_enclosed
-
-            // We handle this outside of `SupportsCondition::parse` for two reasons.
-            // Firstly, unenclosed function calls are also valid general_enclosed,
-            // so `CSS.supports("not foobar(baz)")` is true. Secondly, we need to
-            // be able to deal with the case where `SupportsCondition::parse` finishes,
-            // but the input is not exhausted (so `parse_nested_block` fails). Such
-            // cases are also general_enclosed.
-
-            // general_enclosed is a function or parenthesized block containing
-            // arbitrary tokens
-            if let Ok(inner) = inner {
-                Ok(inner)
-            } else {
-                input.parse_nested_block(|i| Ok(consume_all(i)))?;
+        match input.next()? {
+            Token::ParenthesisBlock => {
+                input.parse_nested_block(|input| {
+                    // `input.try()` not needed here since the alternative uses `consume_all()`.
+                    parse_condition_or_declaration(input).or_else(|()| {
+                        consume_all(input);
+                        Ok(SupportsCondition::FutureSyntax(input.slice_from(pos).to_owned()))
+                    })
+                })
+            }
+            Token::Function(_) => {
+                input.parse_nested_block(|i| Ok(consume_all(i))).unwrap();
                 Ok(SupportsCondition::FutureSyntax(input.slice_from(pos).to_owned()))
             }
-        } else if let Ok(_) = input.try(Parser::expect_function) {
-                input.parse_nested_block(|i| Ok(consume_all(i)))?;
-                Ok(SupportsCondition::FutureSyntax(input.slice_from(pos).to_owned()))
-        } else {
-            Err(())
+            _ => Err(())
         }
     }
 
@@ -121,6 +102,14 @@ impl SupportsCondition {
             SupportsCondition::FutureSyntax(_) => false
         }
     }
+}
+
+/// supports_condition | declaration
+/// https://drafts.csswg.org/css-conditional/#dom-css-supports-conditiontext-conditiontext
+pub fn parse_condition_or_declaration(input: &mut Parser) -> Result<SupportsCondition, ()> {
+    input.try(SupportsCondition::parse).or_else(|()| {
+        Declaration::parse(input).map(SupportsCondition::Declaration)
+    })
 }
 
 impl ToCss for SupportsCondition {

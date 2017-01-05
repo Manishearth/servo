@@ -9,7 +9,7 @@ use dom::bindings::reflector::Reflector;
 use dom::bindings::str::DOMString;
 use dom::window::Window;
 use style::parser::ParserContext;
-use style::supports::{Declaration, SupportsCondition};
+use style::supports::{Declaration, parse_condition_or_declaration};
 
 #[dom_struct]
 pub struct CSS {
@@ -17,7 +17,7 @@ pub struct CSS {
 }
 
 impl CSS {
-    // http://dev.w3.org/csswg/cssom/#serialize-an-identifier
+    /// http://dev.w3.org/csswg/cssom/#serialize-an-identifier
     pub fn Escape(_: &Window, ident: DOMString) -> Fallible<DOMString> {
         let mut escaped = String::new();
         serialize_identifier(&ident, &mut escaped).unwrap();
@@ -27,21 +27,15 @@ impl CSS {
     /// https://drafts.csswg.org/css-conditional/#dom-css-supports
     pub fn Supports(win: &Window, property: DOMString, value: DOMString) -> bool {
         let decl = Declaration { prop: property.into(), val: value.into() };
-        let cond = SupportsCondition::Declaration(decl);
         let url = win.Document().url();
         let context = ParserContext::new_for_cssom(&url);
-        cond.eval(&context)
+        decl.eval(&context)
     }
 
     /// https://drafts.csswg.org/css-conditional/#dom-css-supports
     pub fn Supports_(win: &Window, condition: DOMString) -> bool {
         let mut input = Parser::new(&condition);
-        // toplevel is `false` since the spec asks us to assume implicit
-        // parentheses for declaration-type conditions. This does not
-        // extend to general_enclosed conditions, however those evaluate
-        // to false anyway so it does not matter if erroneously consider
-        // the parsing a success
-        let cond = SupportsCondition::parse(&mut input, /* toplevel */ false);
+        let cond = parse_condition_or_declaration(&mut input);
         if let Ok(cond) = cond {
             let url = win.Document().url();
             let context = ParserContext::new_for_cssom(&url);
