@@ -34,6 +34,7 @@ pub struct WebGLProgram {
     vertex_shader: MutNullableDom<WebGLShader>,
     active_attribs: DomRefCell<Box<[ActiveAttribInfo]>>,
     active_uniforms: DomRefCell<Box<[ActiveUniformInfo]>>,
+    transformfeedback_varyings: DomRefCell<Vec<String>>,
 }
 
 impl WebGLProgram {
@@ -50,6 +51,7 @@ impl WebGLProgram {
             vertex_shader: Default::default(),
             active_attribs: DomRefCell::new(vec![].into()),
             active_uniforms: DomRefCell::new(vec![].into()),
+            transformfeedback_varyings: DomRefCell::new(vec![]),
         }
     }
 
@@ -443,6 +445,14 @@ impl WebGLProgram {
 
     pub fn link_generation(&self) -> u64 {
         self.link_generation.get()
+    }
+
+    pub fn set_transformfeedback_varyings(&self, names: Vec<String>) {
+        *self.transformfeedback_varyings.borrow_mut() = names;
+    }
+
+    pub fn get_transformfeedback_varyings(&self) -> Vec<String> {
+        self.transformfeedback_varyings.borrow().clone()
     }
 }
 

@@ -11,8 +11,8 @@ use crate::dom::bindings::codegen::UnionTypes::ArrayBufferViewOrArrayBuffer;
 use crate::dom::bindings::codegen::UnionTypes::Float32ArrayOrUnrestrictedFloatSequence;
 use crate::dom::bindings::codegen::UnionTypes::ImageDataOrHTMLImageElementOrHTMLCanvasElementOrHTMLVideoElement;
 use crate::dom::bindings::codegen::UnionTypes::Int32ArrayOrLongSequence;
-use crate::dom::bindings::conversions::ToJSValConvertible;
 use crate::dom::bindings::error::{ErrorResult, Fallible};
+use crate::dom::bindings::reflector::DomObject;
 use crate::dom::bindings::reflector::{reflect_dom_object, Reflector};
 use crate::dom::bindings::root::{Dom, DomRoot, LayoutDom, MutNullableDom};
 use crate::dom::bindings::str::DOMString;
@@ -32,8 +32,10 @@ use crate::dom::webglshader::WebGLShader;
 use crate::dom::webglshaderprecisionformat::WebGLShaderPrecisionFormat;
 use crate::dom::webglsync::WebGLSync;
 use crate::dom::webgltexture::WebGLTexture;
+use crate::dom::webgltransformfeedback::WebGLTransformFeedback;
 use crate::dom::webgluniformlocation::WebGLUniformLocation;
 use crate::dom::window::Window;
+use crate::js::conversions::ToJSValConvertible;
 use crate::script_runtime::JSContext;
 use canvas_traits::webgl::WebGLError::*;
 use canvas_traits::webgl::{
@@ -56,6 +58,7 @@ pub struct WebGL2RenderingContext {
     occlusion_query: MutNullableDom<WebGLQuery>,
     primitives_query: MutNullableDom<WebGLQuery>,
     samplers: Box<[MutNullableDom<WebGLSampler>]>,
+    current_transform_feedback: MutNullableDom<WebGLTransformFeedback>,
     bound_copy_read_buffer: MutNullableDom<WebGLBuffer>,
     bound_copy_write_buffer: MutNullableDom<WebGLBuffer>,
     bound_pixel_pack_buffer: MutNullableDom<WebGLBuffer>,
@@ -94,6 +97,7 @@ impl WebGL2RenderingContext {
             occlusion_query: MutNullableDom::new(None),
             primitives_query: MutNullableDom::new(None),
             samplers: samplers,
+            current_transform_feedback: MutNullableDom::new(None),
             bound_copy_read_buffer: MutNullableDom::new(None),
             bound_copy_write_buffer: MutNullableDom::new(None),
             bound_pixel_pack_buffer: MutNullableDom::new(None),
@@ -188,6 +192,9 @@ impl WebGL2RenderingContextMethods for WebGL2RenderingContext {
                 assert!(idx < self.samplers.len());
                 let sampler = self.samplers[idx].get();
                 optional_root_object_to_js_or_null!(*cx, sampler)
+            },
+            constants::TRANSFORM_FEEDBACK_BINDING => unsafe {
+                optional_root_object_to_js_or_null!(*cx, self.current_transform_feedback.get())
             },
             constants::COPY_READ_BUFFER_BINDING => unsafe {
                 optional_root_object_to_js_or_null!(*cx, &self.bound_copy_read_buffer.get())
@@ -1720,6 +1727,216 @@ impl WebGL2RenderingContextMethods for WebGL2RenderingContext {
                 NullValue()
             },
         }
+    }
+
+    /// https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.15
+    fn CreateTransformFeedback(&self) -> Option<DomRoot<WebGLTransformFeedback>> {
+        Some(WebGLTransformFeedback::new(&self.base))
+    }
+
+    /// https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.15
+    fn DeleteTransformFeedback(&self, tf: Option<&WebGLTransformFeedback>) {
+        if let Some(tf) = tf {
+            handle_potential_webgl_error!(self.base, self.base.validate_ownership(tf), return);
+            if tf.is_active() {
+                self.base.webgl_error(InvalidOperation);
+                return;
+            }
+            tf.delete(false);
+            self.current_transform_feedback.set(None);
+        }
+    }
+
+    /// https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.15
+    fn IsTransformFeedback(&self, tf: Option<&WebGLTransformFeedback>) -> bool {
+        match tf {
+            Some(tf) => {
+                if !tf.is_valid() {
+                    return false;
+                }
+                handle_potential_webgl_error!(
+                    self.base,
+                    self.base.validate_ownership(tf),
+                    return false
+                );
+                let (sender, receiver) = webgl_channel().unwrap();
+                self.base
+                    .send_command(WebGLCommand::IsTransformFeedback(tf.id(), sender));
+                receiver.recv().unwrap()
+            },
+            None => false,
+        }
+    }
+
+    /// https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.15
+    fn BindTransformFeedback(&self, target: u32, tf: Option<&WebGLTransformFeedback>) {
+        if target != constants::TRANSFORM_FEEDBACK {
+            self.base.webgl_error(InvalidEnum);
+            return;
+        }
+        match tf {
+            Some(transform_feedback) => {
+                handle_potential_webgl_error!(
+                    self.base,
+                    self.base.validate_ownership(transform_feedback),
+                    return
+                );
+                if !transform_feedback.is_valid() {
+                    self.base.webgl_error(InvalidOperation);
+                    return;
+                }
+                if let Some(current_tf) = self.current_transform_feedback.get() {
+                    if current_tf.is_active() && !current_tf.is_paused() {
+                        self.base.webgl_error(InvalidOperation);
+                        return;
+                    }
+                }
+                transform_feedback.bind(&self.base, target);
+                self.current_transform_feedback
+                    .set(Some(transform_feedback));
+            },
+            None => self
+                .base
+                .send_command(WebGLCommand::BindTransformFeedback(target, 0)),
+        }
+    }
+
+    /// https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.15
+    fn BeginTransformFeedback(&self, primitiveMode: u32) {
+        match primitiveMode {
+            constants::POINTS | constants::LINES | constants::TRIANGLES => {
+                match self.current_transform_feedback.get() {
+                    Some(current_tf) => {
+                        if current_tf.is_active() {
+                            self.base.webgl_error(InvalidOperation);
+                            return;
+                        }
+                        match self.base.current_program() {
+                            Some(program) => {
+                                if !program.is_linked() ||
+                                    !program.get_transformfeedback_varyings().is_empty()
+                                {
+                                    self.base.webgl_error(InvalidOperation);
+                                    return;
+                                }
+                            },
+                            None => {
+                                self.base.webgl_error(InvalidOperation);
+                                return;
+                            },
+                        }
+                        current_tf.begin(&self.base, primitiveMode);
+                    },
+                    None => {
+                        self.base.webgl_error(InvalidOperation);
+                        return;
+                    },
+                }
+            },
+            _ => self.base.webgl_error(InvalidEnum),
+        };
+    }
+
+    /// https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.15
+    fn EndTransformFeedback(&self) {
+        if let Some(current_tf) = self.current_transform_feedback.get() {
+            if !current_tf.is_active() {
+                self.base.webgl_error(InvalidOperation);
+                return;
+            }
+            current_tf.end(&self.base);
+        }
+    }
+
+    /// https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.15
+    fn ResumeTransformFeedback(&self) {
+        if let Some(current_tf) = self.current_transform_feedback.get() {
+            if !current_tf.is_active() || !current_tf.is_paused() {
+                self.base.webgl_error(InvalidOperation);
+                return;
+            }
+            current_tf.resume(&self.base);
+        }
+    }
+
+    /// https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.15
+    fn PauseTransformFeedback(&self) {
+        if let Some(current_tf) = self.current_transform_feedback.get() {
+            if !current_tf.is_active() || current_tf.is_paused() {
+                self.base.webgl_error(InvalidOperation);
+                return;
+            }
+            current_tf.pause(&self.base);
+        }
+    }
+
+    /// https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.15
+    fn TransformFeedbackVaryings(
+        &self,
+        program: &WebGLProgram,
+        varyings: Vec<DOMString>,
+        bufferMode: u32,
+    ) {
+        handle_potential_webgl_error!(self.base, program.validate(), return);
+        let strs = varyings
+            .iter()
+            .map(|name| String::from(&*name.to_owned()))
+            .collect::<Vec<String>>();
+        match bufferMode {
+            constants::INTERLEAVED_ATTRIBS => {
+                self.base
+                    .send_command(WebGLCommand::TransformFeedbackVaryings(
+                        program.id(),
+                        strs,
+                        bufferMode,
+                    ))
+            },
+            constants::SEPARATE_ATTRIBS => {
+                let max_tf_sp_att =
+                    self.base.limits().max_transform_feedback_separate_attribs as usize;
+                if strs.len() >= max_tf_sp_att {
+                    self.base.webgl_error(InvalidValue);
+                    return;
+                }
+                program.set_transformfeedback_varyings(strs.clone());
+                self.base
+                    .send_command(WebGLCommand::TransformFeedbackVaryings(
+                        program.id(),
+                        strs,
+                        bufferMode,
+                    ));
+            },
+            _ => self.base.webgl_error(InvalidEnum),
+        }
+    }
+
+    /// https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.15
+    fn GetTransformFeedbackVarying(
+        &self,
+        program: &WebGLProgram,
+        index: u32,
+    ) -> Option<DomRoot<WebGLActiveInfo>> {
+        handle_potential_webgl_error!(self.base, program.validate(), return None);
+        let varyings_num = program.get_transformfeedback_varyings().len() as u32;
+        if index >= varyings_num {
+            self.base.webgl_error(InvalidValue);
+            return None;
+        }
+
+        let (sender, receiver) = webgl_channel().unwrap();
+        self.base
+            .send_command(WebGLCommand::GetTransformFeedbackVarying(
+                program.id(),
+                index,
+                sender,
+            ));
+        let (size, ty, name) = receiver.recv().unwrap();
+        Some(WebGLActiveInfo::new(
+            self.base.global().as_window(),
+            size,
+            ty,
+            DOMString::from(name),
+        ))
     }
 }
 

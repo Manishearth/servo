@@ -1180,6 +1180,40 @@ impl WebGLImpl {
             WebGLCommand::GetRenderbufferParameter(target, pname, ref chan) => {
                 Self::get_renderbuffer_parameter(gl, target, pname, chan)
             },
+            WebGLCommand::CreateTransformFeedback(ref sender) => {
+                let value = gl.gen_transform_feedbacks();
+                sender.send(value).unwrap()
+            },
+            WebGLCommand::DeleteTransformFeedback(id) => {
+                gl.delete_transform_feedbacks(id);
+            },
+            WebGLCommand::IsTransformFeedback(id, ref sender) => {
+                let value = gl.is_transform_feedback(id);
+                sender.send(value).unwrap()
+            },
+            WebGLCommand::BindTransformFeedback(target, id) => {
+                gl.bind_transform_feedback(target, id);
+            },
+            WebGLCommand::BeginTransformFeedback(mode) => {
+                gl.begin_transform_feedback(mode);
+            },
+            WebGLCommand::EndTransformFeedback() => {
+                gl.end_transform_feedback();
+            },
+            WebGLCommand::PauseTransformFeedback() => {
+                gl.pause_transform_feedback();
+            },
+            WebGLCommand::ResumeTransformFeedback() => {
+                gl.resume_transform_feedback();
+            },
+            WebGLCommand::GetTransformFeedbackVarying(program, index, ref sender) => {
+                let (size, ty, mut name) = gl.get_transform_feedback_varying(program.get(), index);
+                let name_ = String::from(name.split_off(2).trim_matches('0').trim_matches('\0'));
+                sender.send((size, ty, name_)).unwrap();
+            },
+            WebGLCommand::TransformFeedbackVaryings(program, ref varyings, buffer_mode) => {
+                gl.transform_feedback_varyings(program.get(), varyings, buffer_mode);
+            },
             WebGLCommand::GetFramebufferAttachmentParameter(
                 target,
                 attachment,
@@ -1816,7 +1850,6 @@ impl WebGLImpl {
                 active_uniforms: vec![].into(),
             };
         }
-
         let mut num_active_attribs = [0];
         unsafe {
             gl.get_program_iv(

@@ -1100,6 +1100,10 @@ impl WebGLRenderingContext {
         &self.extension_manager
     }
 
+    pub fn current_program(&self) -> Option<DomRoot<WebGLProgram>> {
+        self.current_program.get()
+    }
+
     #[allow(unsafe_code)]
     pub fn buffer_data(
         &self,
