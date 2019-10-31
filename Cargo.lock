@@ -5113,7 +5113,6 @@ dependencies = [
 [[package]]
 name = "surfman"
 version = "0.23.0"
-source = "git+https://github.com/asajeffrey/surfman?branch=servo#f776ee4c1f3f5892dece12fb2eb522fad93cfe68"
 dependencies = [
  "bitflags",
  "cgl 0.3.2",
@@ -6028,7 +6027,6 @@ dependencies = [
 [[package]]
 name = "webxr"
 version = "0.0.1"
-source = "git+https://github.com/asajeffrey/webxr?branch=surfman#bf25daa4fe6b7a2e1f95dcc6c1958616a6d4a72b"
 dependencies = [
  "bindgen",
  "euclid",

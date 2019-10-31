@@ -21,7 +21,7 @@ OpenGLES::~OpenGLES() { Cleanup(); }
 
 void OpenGLES::Initialize() {
   const EGLint configAttributes[] = {EGL_RENDERABLE_TYPE,
-                                     EGL_OPENGL_ES2_BIT,
+                                     EGL_OPENGL_ES3_BIT,
                                      EGL_RED_SIZE,
                                      8,
                                      EGL_GREEN_SIZE,

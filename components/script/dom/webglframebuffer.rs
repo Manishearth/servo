@@ -178,7 +178,9 @@ impl WebGLFramebuffer {
         // Update the framebuffer status on binding.  It may have
         // changed if its attachments were resized or deleted while
         // we've been unbound.
-        self.update_status();
+        if !self.is_in_xr_session() {
+            self.update_status();
+        }
 
         self.target.set(Some(target));
         self.upcast::<WebGLObject>()
