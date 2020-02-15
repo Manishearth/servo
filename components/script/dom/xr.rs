@@ -284,7 +284,6 @@ impl XR {
                 return;
             },
         };
-
         let session = XRSession::new(&self.global(), session, mode, frame_receiver);
         if mode == XRSessionMode::Inline {
             self.active_inline_sessions
@@ -294,6 +293,8 @@ impl XR {
             self.set_active_immersive_session(&session);
         }
         promise.resolve_native(&session);
+        // https://github.com/immersive-web/webxr/issues/961
+        session.setup_initial_inputs();
     }
 
     pub fn get_displays(&self) -> Result<Vec<DomRoot<VRDisplay>>, ()> {
