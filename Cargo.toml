@@ -32,3 +32,7 @@ mio = { git = "https://github.com/servo/mio.git", branch = "servo" }
 winapi = { git = "https://github.com/servo/winapi-rs", branch = "patch-1" }
 spirv_cross = { git = "https://github.com/servo/spirv_cross", branch = "wgpu-servo" }
 backtrace = { git = "https://github.com/MeFisto94/backtrace-rs", branch = "fix-strtab-freeing-crash" }
+
+[patch."https://github.com/servo/webxr"]
+webxr = { path = "../webxr/webxr" }
+webxr-api = { path = "../webxr/webxr-api" }
