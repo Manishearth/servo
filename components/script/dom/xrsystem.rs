@@ -4,6 +4,9 @@
 
 use crate::dom::bindings::cell::DomRefCell;
 use crate::dom::bindings::codegen::Bindings::VRDisplayBinding::VRDisplayMethods;
+use crate::dom::bindings::codegen::Bindings::XRSessionBinding::XRSessionMethods;
+use crate::dom::bindings::codegen::Bindings::XRRenderStateBinding::XRRenderStateMethods;
+use crate::dom::bindings::codegen::Bindings::XRWebGLLayerBinding::{XRWebGLLayerMethods, XRWebGLRenderingContext};
 use crate::dom::bindings::codegen::Bindings::XRSystemBinding::XRSessionInit;
 use crate::dom::bindings::codegen::Bindings::XRSystemBinding::{XRSessionMode, XRSystemMethods};
 use crate::dom::bindings::conversions::{ConversionResult, FromJSValConvertible};
@@ -99,6 +102,12 @@ impl XRSystem {
         if let Some(active) = self.active_immersive_session.get() {
             if Dom::from_ref(&*active) == Dom::from_ref(session) {
                 self.active_immersive_session.set(None);
+                if let Some(layer) = session.RenderState().GetBaseLayer() {
+                    match layer.Context() {
+                        XRWebGLRenderingContext::WebGLRenderingContext(c) => c.mark_as_dirty(),
+                        XRWebGLRenderingContext::WebGL2RenderingContext(c) => c.base_context().mark_as_dirty(),
+                    }
+                }
             }
         }
         self.active_inline_sessions
