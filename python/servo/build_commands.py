@@ -238,23 +238,12 @@ class MachCommands(CommandBase):
         if very_verbose:
             opts += ["-vv"]
 
-        env = self.build_env(target=target, is_build=True, uwp=uwp, features=features)
-        self.ensure_bootstrapped(target=target)
-        self.ensure_clobbered()
-
-        build_start = time()
-        env["CARGO_TARGET_DIR"] = target_path
-
         host = host_triple()
         target_triple = target or host_triple()
-        if 'apple-darwin' in host and target_triple == host:
-            if 'CXXFLAGS' not in env:
-                env['CXXFLAGS'] = ''
-            env["CXXFLAGS"] += "-mmacosx-version-min=10.10"
 
         if 'windows' in host:
             vs_dirs = self.vs_dirs()
-
+  
         if host != target_triple and 'windows' in target_triple:
             if os.environ.get('VisualStudioVersion'):
                 print("Can't cross-compile for Windows inside of a Visual Studio shell.\n"
@@ -266,7 +255,35 @@ class MachCommands(CommandBase):
                 print("Can't find Visual C++ %s installation at %s." % (vs_dirs['vs_version'], vcinstalldir))
                 sys.exit(1)
 
-            env['PKG_CONFIG_ALLOW_CROSS'] = "1"
+            os.environ['PKG_CONFIG_ALLOW_CROSS'] = "1"
+     
+        if 'windows' in host:
+            process = subprocess.Popen('("%s" %s > nul) && "python" -c "import os; print(repr(os.environ))"' %
+                                       (os.path.join(vs_dirs['vcdir'], "Auxiliary", "Build", "vcvarsall.bat"), "x64"),
+                                       stdout=subprocess.PIPE, shell=True)
+            stdout, _ = process.communicate()
+            exitcode = process.wait()
+            encoding = locale.getpreferredencoding()  # See https://stackoverflow.com/a/9228117
+            # print(stdout)
+            if exitcode == 0:
+                print("got", eval(stdout.decode(encoding))["PATH"])
+                os.environ.update(eval(stdout.decode(encoding)))
+            else:
+                raise Error("Cannot run vcvarsall")
+
+        env = self.build_env(target=target, is_build=True, uwp=uwp, features=features)
+        self.ensure_bootstrapped(target=target)
+        self.ensure_clobbered()
+
+        build_start = time()
+        env["CARGO_TARGET_DIR"] = target_path
+
+
+        if 'apple-darwin' in host and target_triple == host:
+            if 'CXXFLAGS' not in env:
+                env['CXXFLAGS'] = ''
+            env["CXXFLAGS"] += "-mmacosx-version-min=10.10"
+
 
         if uwp:
             # Ensure libstd is ready for the new UWP target.
@@ -310,16 +327,7 @@ class MachCommands(CommandBase):
                 self.msvc_package_dir("gstreamer-uwp"), arch['gst_root'],
                 "lib", "pkgconfig"
             )
-
-        if 'windows' in host:
-            process = subprocess.Popen('("%s" %s > nul) && "python" -c "import os; print(repr(os.environ))"' %
-                                       (os.path.join(vs_dirs['vcdir'], "Auxiliary", "Build", "vcvarsall.bat"), "x64"),
-                                       stdout=subprocess.PIPE, shell=True)
-            stdout, _ = process.communicate()
-            exitcode = process.wait()
-            encoding = locale.getpreferredencoding()  # See https://stackoverflow.com/a/9228117
-            if exitcode == 0:
-                os.environ.update(eval(stdout.decode(encoding)))
+        print("one", env["PATH"])
 
         # Ensure that GStreamer libraries are accessible when linking.
         if 'windows' in target_triple:
@@ -653,7 +661,7 @@ class MachCommands(CommandBase):
         else:
             env.setdefault("CC", "clang")
             env.setdefault("CXX", "clang++")
-
+        
         status = self.run_cargo_build_like_command(
             "build", opts, env=env, verbose=verbose,
             target=target, android=android, magicleap=magicleap, libsimpleservo=libsimpleservo, uwp=uwp,

@@ -691,6 +691,7 @@ install them, let us know by filing a bug!")
                 env["HARFBUZZ_SYS_NO_PKG_CONFIG"] = "true"
 
         if extra_path:
+            print (';'.join(extra_path))
             append_to_path_env(os.pathsep.join(extra_path), env, "PATH")
 
         if self.config["build"]["incremental"]:
@@ -741,7 +742,6 @@ install them, let us know by filing a bug!")
             # This wrapper script is in bash and doesn't work on Windows
             # where we want to run doctests as part of `./mach test-unit`
             env['RUSTDOC'] = path.join(self.context.topdir, 'etc', 'rustdoc-with-private')
-
         if self.config["build"]["rustflags"]:
             env['RUSTFLAGS'] = env.get('RUSTFLAGS', "") + " " + self.config["build"]["rustflags"]
 
@@ -935,7 +935,7 @@ install them, let us know by filing a bug!")
 
         assert "--features" not in cargo_args
         args += ["--features", " ".join(features)]
-
+        print(env["RUSTFLAGS"])
         if target and 'uwp' in target:
             return call(["xargo", command] + args + cargo_args, env=env, verbose=verbose)
         else:
