@@ -239,6 +239,7 @@ class MachCommands(CommandBase):
             opts += ["-vv"]
 
         env = self.build_env(target=target, is_build=True, uwp=uwp, features=features)
+
         self.ensure_bootstrapped(target=target)
         self.ensure_clobbered()
 
@@ -297,7 +298,7 @@ class MachCommands(CommandBase):
             # to the Rust linker.
             append_to_path_env(angle_root(target_triple, env), env, "LIB")
 
-            # Don't want to mix non-UWP libraries with vendored UWP libraries.
+            # Don't want to mix non-UWP libraries with vendored UWP libraries.x`
             if "gstreamer" in env['LIB']:
                 print("Found existing GStreamer library path in LIB. Please remove it.")
                 sys.exit(1)
@@ -320,6 +321,13 @@ class MachCommands(CommandBase):
             encoding = locale.getpreferredencoding()  # See https://stackoverflow.com/a/9228117
             if exitcode == 0:
                 os.environ.update(eval(stdout.decode(encoding)))
+                env["VCINSTALLDIR"] = os.environ.get("VCINSTALLDIR")
+                env["VSINSTALLDIR"] = os.environ.get("VSINSTALLDIR")
+                print(env["LIB"])
+                env["LIB"] = env["LIB"] + ";" + os.environ.get("LIB")
+                env["PATH"] = env["PATH"] + ";" + os.environ.get("PATH")
+                print(env["LIB"])
+                env["VCToolsInstallDir"] = os.environ.get("VCToolsInstallDir")
 
         # Ensure that GStreamer libraries are accessible when linking.
         if 'windows' in target_triple:
@@ -659,7 +667,6 @@ class MachCommands(CommandBase):
             target=target, android=android, magicleap=magicleap, libsimpleservo=libsimpleservo, uwp=uwp,
             features=features, **kwargs
         )
-
         elapsed = time() - build_start
 
         # Do some additional things if the build succeeded
