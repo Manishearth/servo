@@ -571,7 +571,7 @@ impl Parse for Display {
             "-webkit-flex" if flexbox_enabled() => Display::Flex,
             "inline-flex" | "-webkit-inline-flex" if flexbox_enabled() => Display::InlineFlex,
             #[cfg(feature = "gecko")]
-            "inline-grid" if table_enabled() => Display::InlineGrid,
+            "inline-grid" => Display::InlineGrid,
             "table-caption" if table_enabled() => Display::TableCaption,
             "table-row-group" if table_enabled() => Display::TableRowGroup,
             "table-header-group" if table_enabled() => Display::TableHeaderGroup,
