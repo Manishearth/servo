@@ -308,7 +308,9 @@ impl InlineFormattingContext {
                                     block: ifc.lines.next_line_block_position,
                                 },
                                 Display::GeneratingBox(DisplayGeneratingBox::Internal(_)) => {
-                                    panic!("display:table-foo does not generate an abspos box");
+                                    panic!(
+                                    "the result of blockification is never a layout-internal value"
+                                );
                                 },
                                 Display::Contents => {
                                     panic!("display:contents does not generate an abspos box")

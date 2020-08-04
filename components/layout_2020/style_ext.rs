@@ -71,6 +71,8 @@ impl DisplayInternal {
     /// https://drafts.csswg.org/css-display-3/#layout-specific-displa
     pub(crate) fn display_inside(&self) -> DisplayInside {
         // When we add ruby, the display_inside of ruby must be Flow
+        // XXXManishearth this should be unreachable for everything but
+        // table cell and caption, once we have box tree fixups
         DisplayInside::FlowRoot {
             is_list_item: false,
         }
@@ -481,20 +483,21 @@ impl From<stylo::Display> for Display {
         let outside = match outside {
             stylo::DisplayOutside::Block => DisplayOutside::Block,
             stylo::DisplayOutside::Inline => DisplayOutside::Inline,
-            stylo::DisplayOutside::TableCaption | stylo::DisplayOutside::InternalTable => {
-                let internal = if let stylo::DisplayOutside::TableCaption = outside {
-                    DisplayInternal::TableCaption
-                } else {
-                    match packed.inside() {
-                        stylo::DisplayInside::TableRowGroup => DisplayInternal::TableRowGroup,
-                        stylo::DisplayInside::TableColumn => DisplayInternal::TableColumn,
-                        stylo::DisplayInside::TableColumnGroup => DisplayInternal::TableColumnGroup,
-                        stylo::DisplayInside::TableHeaderGroup => DisplayInternal::TableHeaderGroup,
-                        stylo::DisplayInside::TableFooterGroup => DisplayInternal::TableFooterGroup,
-                        stylo::DisplayInside::TableRow => DisplayInternal::TableRow,
-                        stylo::DisplayInside::TableCell => DisplayInternal::TableCell,
-                        _ => unreachable!("Non-internal DisplayInside found"),
-                    }
+            stylo::DisplayOutside::TableCaption => {
+                return Display::GeneratingBox(DisplayGeneratingBox::Internal(
+                    DisplayInternal::TableCaption,
+                ));
+            },
+            stylo::DisplayOutside::InternalTable => {
+                let internal = match packed.inside() {
+                    stylo::DisplayInside::TableRowGroup => DisplayInternal::TableRowGroup,
+                    stylo::DisplayInside::TableColumn => DisplayInternal::TableColumn,
+                    stylo::DisplayInside::TableColumnGroup => DisplayInternal::TableColumnGroup,
+                    stylo::DisplayInside::TableHeaderGroup => DisplayInternal::TableHeaderGroup,
+                    stylo::DisplayInside::TableFooterGroup => DisplayInternal::TableFooterGroup,
+                    stylo::DisplayInside::TableRow => DisplayInternal::TableRow,
+                    stylo::DisplayInside::TableCell => DisplayInternal::TableCell,
+                    _ => unreachable!("Non-internal DisplayInside found"),
                 };
                 return Display::GeneratingBox(DisplayGeneratingBox::Internal(internal));
             },
