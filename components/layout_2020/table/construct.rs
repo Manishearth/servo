@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
 use super::TableContainer;
 use crate::context::LayoutContext;
 use crate::dom_traversal::{
@@ -160,7 +164,7 @@ pub(crate) enum TableSlot {
     Spanned(usize, usize),
     /// This slot is spanned by multiple cells at the given negative coordinate offsets. Oops.
     /// This is a table model error, but we still keep track of it
-    /// https://html.spec.whatwg.org/multipage/tables.html#table-model-error
+    /// https://html.spec.whatwg.org/multipage/#table-model-error
     ///
     /// The Vec is in the order of newest to oldest cell
     MultiSpanned(Vec<(usize, usize)>),
@@ -261,7 +265,7 @@ where
         // TODO: this might need to be wrapped in something
     }
 
-    /// https://html.spec.whatwg.org/multipage/tables.html#forming-a-table
+    /// https://html.spec.whatwg.org/multipage/#forming-a-table
     fn handle_element(
         &mut self,
         info: &NodeAndStyleInfo<Node>,
@@ -338,7 +342,7 @@ where
         // TODO: this might need to be wrapped in something
     }
 
-    /// https://html.spec.whatwg.org/multipage/tables.html#algorithm-for-processing-rows
+    /// https://html.spec.whatwg.org/multipage/#algorithm-for-processing-rows
     fn handle_element(
         &mut self,
         info: &NodeAndStyleInfo<Node>,
@@ -418,7 +422,7 @@ where
         }
     }
 
-    /// https://html.spec.whatwg.org/multipage/tables.html#algorithm-for-processing-rows
+    /// https://html.spec.whatwg.org/multipage/#algorithm-for-processing-rows
     /// Push a single cell onto the cell slot map, handling any colspans it may have, and
     /// setting up the outgoing rowspans
     fn handle_cell(&mut self, info: &NodeAndStyleInfo<Node>) {
