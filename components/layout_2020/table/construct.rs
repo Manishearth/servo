@@ -453,8 +453,8 @@ where
                 .resize(current_x + colspan, 0isize);
         }
 
-        debug_assert!(
-            self.builder.incoming_rowspans[current_x] == 0,
+        debug_assert_eq!(
+            self.builder.incoming_rowspans[current_x], 0,
             "consume_rowspans must have been called before this!"
         );
 
@@ -462,53 +462,53 @@ where
         let outgoing_rowspan = rowspan as isize - 1;
         self.builder.slots.push(me);
         self.builder.incoming_rowspans[current_x] = outgoing_rowspan;
-        if colspan > 1 {
-            // Keep track of if there's a model error, if so we need to perform fixups
-            for offset in 1..colspan {
-                let offset_x = current_x + offset;
-                let new_slot = TableSlot::Spanned(offset, 0);
-                let incoming_rowspan = &mut self.builder.incoming_rowspans[offset_x];
-                if *incoming_rowspan == 0 {
-                    *incoming_rowspan = outgoing_rowspan;
-                    self.builder.slots.push(new_slot);
 
-                    // No model error, skip the remaining stuff
-                    continue;
-                } else if *incoming_rowspan > 0 {
-                    // Set the incoming rowspan to the highest of two possible outgoing rowspan values
-                    // (the incoming rowspan minus one, OR this cell's outgoing rowspan)
-                    // spanned_slot() will handle filtering out inapplicable spans when it needs to
-                    *incoming_rowspan = cmp::max(*incoming_rowspan - 1, outgoing_rowspan);
-                } else {
-                    // Don't change the rowspan, if it's negative we are in `rowspan=0` mode,
-                    // i.e. rowspan=infinity, so we don't have to worry about the current cell making
-                    // it larger
+        // Draw colspanned cells
+        for offset in 1..colspan {
+            let offset_x = current_x + offset;
+            let new_slot = TableSlot::Spanned(offset, 0);
+            let incoming_rowspan = &mut self.builder.incoming_rowspans[offset_x];
+            if *incoming_rowspan == 0 {
+                *incoming_rowspan = outgoing_rowspan;
+                self.builder.slots.push(new_slot);
 
-                    // do nothing
-                }
+                // No model error, skip the remaining stuff
+                continue;
+            } else if *incoming_rowspan > 0 {
+                // Set the incoming rowspan to the highest of two possible outgoing rowspan values
+                // (the incoming rowspan minus one, OR this cell's outgoing rowspan)
+                // spanned_slot() will handle filtering out inapplicable spans when it needs to
+                *incoming_rowspan = cmp::max(*incoming_rowspan - 1, outgoing_rowspan);
+            } else {
+                // Don't change the rowspan, if it's negative we are in `rowspan=0` mode,
+                // i.e. rowspan=infinity, so we don't have to worry about the current cell making
+                // it larger
 
-                // Code for handling model errors
-                let previous = self
-                    .builder
-                    .slots
-                    .get_above(offset_x)
-                    .expect("Cannot have nonzero incoming rowspan with no slot above");
-                let incoming_slot =
-                    self.builder
-                        .slots
-                        .spanned_slot(offset_x, self.builder.current_y(), previous);
-                let new_slot = incoming_slot
-                    .map(|mut s| {
-                        s.push_spanned(offset, 0);
-                        s
-                    })
-                    .unwrap_or(new_slot);
-                self.builder.slots.push(new_slot)
+                // do nothing
             }
+
+            // Code for handling model errors
+            let previous = self
+                .builder
+                .slots
+                .get_above(offset_x)
+                .expect("Cannot have nonzero incoming rowspan with no slot above");
+            let incoming_slot =
+                self.builder
+                    .slots
+                    .spanned_slot(offset_x, self.builder.current_y(), previous);
+            let new_slot = incoming_slot
+                .map(|mut s| {
+                    s.push_spanned(offset, 0);
+                    s
+                })
+                .unwrap_or(new_slot);
+            self.builder.slots.push(new_slot)
         }
 
-        debug_assert!(
-            current_x + colspan == self.current_x(),
+        debug_assert_eq!(
+            current_x + colspan,
+            self.current_x(),
             "Must have produced `colspan` slot entries!"
         );
     }
