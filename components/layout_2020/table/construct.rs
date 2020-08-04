@@ -112,15 +112,14 @@ impl TableSlots {
     /// If (x, y) is spanned by the resolution of `spanner`, return a
     /// TableSlot::Spanned() or TableSlot::MultiSpanned() for it
     fn spanned_slot(&self, x: usize, y: usize, spanner: SlotAndLocation) -> Option<TableSlot> {
-        let resolved = self.resolve_slot(spanner);
-        if resolved.1.is_empty() {
-            self.spanned_slot_single(x, y, resolved.0)
+        let (first, mut rest) = self.resolve_slot(spanner);
+        if rest.is_empty() {
+            self.spanned_slot_single(x, y, first)
                 .map(|spanned| TableSlot::Spanned(spanned.0, spanned.1))
         } else {
-            let mut vec = resolved.1;
-            vec.push(resolved.0);
+            rest.push(first);
 
-            let coordinates: Vec<_> = vec
+            let coordinates: Vec<_> = rest
                 .into_iter()
                 .filter_map(|slot| self.spanned_slot_single(x, y, slot))
                 .collect();
