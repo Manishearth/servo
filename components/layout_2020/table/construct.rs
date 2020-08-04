@@ -376,7 +376,10 @@ where
     /// filled so that the next specified cell comes after them. Should have been called before
     /// handle_cell
     ///
-    /// if stop_at_zero is set,
+    /// if stop_at_zero is set, this will stop at the first slot with incoming_rowspans equal
+    /// to zero. If not, it will insert Empty TableSlots and continue to look for more incoming
+    /// rowspans (which should only be done once we're finished processing the cells in a row,
+    /// and after calling truncate_incoming_rowspans() )
     fn consume_rowspans(&mut self, stop_at_zero: bool) {
         loop {
             let current_x = self.current_x();
