@@ -7,5 +7,9 @@
 pub mod construct;
 pub mod layout;
 
+use construct::TableSlots;
+
 #[derive(Debug, Serialize)]
-pub(crate) struct TableContainer {}
+pub(crate) struct TableContainer {
+    slots: TableSlots,
+}

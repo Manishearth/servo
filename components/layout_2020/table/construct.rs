@@ -233,6 +233,7 @@ struct TableContainerBuilder<'a, Node> {
     /// in the slot map the value in this array represents the incoming rowspan for the *next* row
     incoming_rowspans: Vec<isize>,
     propagated_text_decoration_line: TextDecorationLine,
+    longest_width: usize,
 }
 
 impl TableContainer {
@@ -246,7 +247,10 @@ impl TableContainer {
         let mut builder =
             TableContainerBuilder::new(context, info, propagated_text_decoration_line);
         contents.traverse(context, info, &mut builder);
-        TableContainer {}
+        builder.apply_fixups();
+        TableContainer {
+            slots: builder.slots,
+        }
     }
 }
 
@@ -262,11 +266,23 @@ impl<'a, Node> TableContainerBuilder<'a, Node> {
             slots: TableSlots::default(),
             incoming_rowspans: Vec::new(),
             propagated_text_decoration_line,
+            longest_width: 0,
         }
     }
 
     fn current_y(&self) -> usize {
         self.slots.rows.len() - 1
+    }
+
+    /// https://drafts.csswg.org/css-tables/#missing-cells-fixup
+    fn apply_fixups(&mut self) {
+        for row in &mut self.slots.rows {
+            if row.slots.len() < self.longest_width {
+                row.slots
+                    .resize_with(self.longest_width, || TableSlot::Empty)
+            }
+        }
+        // XXXManishearth is track merging still necessary?
     }
 }
 
@@ -313,6 +329,10 @@ where
                     );
                     row_builder.truncate_incoming_rowspans();
                     row_builder.consume_rowspans(false);
+                    self.longest_width = cmp::max(
+                        self.longest_width,
+                        self.slots.rows.last().unwrap().slots.len(),
+                    )
 
                     // XXXManishearth push some kind of row box somewhere
                 },
