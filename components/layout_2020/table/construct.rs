@@ -11,7 +11,8 @@ use crate::context::LayoutContext;
 use crate::dom_traversal::{
     BoxSlot, Contents, NodeAndStyleInfo, NodeExt, NonReplacedContents, TraversalHandler,
 };
-use crate::style_ext::{DisplayGeneratingBox, DisplayInternal};
+use crate::formatting_contexts::IndependentFormattingContext;
+use crate::style_ext::{DisplayGeneratingBox, DisplayInside, DisplayInternal};
 use script_layout_interface::wrapper_traits::ThreadSafeLayoutNode;
 use std::borrow::Cow;
 use std::cmp;
@@ -216,7 +217,9 @@ impl fmt::Debug for TableSlot {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct TableCellBox {}
+pub(crate) struct TableCellBox {
+    contents: IndependentFormattingContext,
+}
 
 struct TableContainerBuilder<'a, Node> {
     context: &'a LayoutContext<'a>,
@@ -229,6 +232,7 @@ struct TableContainerBuilder<'a, Node> {
     /// This vector is reused for the outgoing rowspans, if there is already a cell
     /// in the slot map the value in this array represents the incoming rowspan for the *next* row
     incoming_rowspans: Vec<isize>,
+    propagated_text_decoration_line: TextDecorationLine,
 }
 
 impl TableContainer {
@@ -237,21 +241,27 @@ impl TableContainer {
         info: &NodeAndStyleInfo<impl NodeExt<'dom>>,
         contents: NonReplacedContents,
         // XXXManishearth is this useful?
-        _propagated_text_decoration_line: TextDecorationLine,
+        propagated_text_decoration_line: TextDecorationLine,
     ) -> Self {
-        let mut builder = TableContainerBuilder::new(context, info);
+        let mut builder =
+            TableContainerBuilder::new(context, info, propagated_text_decoration_line);
         contents.traverse(context, info, &mut builder);
         TableContainer {}
     }
 }
 
 impl<'a, Node> TableContainerBuilder<'a, Node> {
-    fn new(context: &'a LayoutContext, info: &'a NodeAndStyleInfo<Node>) -> Self {
+    fn new(
+        context: &'a LayoutContext,
+        info: &'a NodeAndStyleInfo<Node>,
+        propagated_text_decoration_line: TextDecorationLine,
+    ) -> Self {
         TableContainerBuilder {
             context,
             info,
             slots: TableSlots::default(),
             incoming_rowspans: Vec::new(),
+            propagated_text_decoration_line,
         }
     }
 
@@ -356,7 +366,7 @@ where
         match display {
             DisplayGeneratingBox::Internal(i) => match i {
                 DisplayInternal::TableCell => {
-                    self.handle_cell(&info);
+                    self.handle_cell(&info, contents);
                     self.consume_rowspans(true);
                     // XXXManishearth this will not handle any leftover incoming rowspans
                     // after all cells are processed, we need to introduce TableSlot::None
@@ -431,7 +441,7 @@ where
     /// https://html.spec.whatwg.org/multipage/#algorithm-for-processing-rows
     /// Push a single cell onto the slot map, handling any colspans it may have, and
     /// setting up the outgoing rowspans
-    fn handle_cell(&mut self, info: &NodeAndStyleInfo<Node>) {
+    fn handle_cell(&mut self, info: &NodeAndStyleInfo<Node>, contents: Contents) {
         let current_x = self.current_x();
         let node = info.node.to_threadsafe();
         // This value will already have filtered out rowspan=0
@@ -439,8 +449,19 @@ where
         let rowspan = cmp::min(node.get_rowspan() as usize, 1000);
         let colspan = cmp::min(node.get_colspan() as usize, 1000);
 
+        // All table cells are internally flow-root
+        let display_inside = DisplayInside::FlowRoot {
+            is_list_item: false,
+        };
+        let contents = IndependentFormattingContext::construct(
+            self.builder.context,
+            info,
+            display_inside,
+            contents,
+            self.builder.propagated_text_decoration_line,
+        );
         let me = TableSlot::Cell {
-            cell: TableCellBox {},
+            cell: TableCellBox { contents },
             width: colspan,
             height: rowspan,
         };
